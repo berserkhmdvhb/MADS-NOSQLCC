@@ -1,0 +1,86 @@
+#////////////////////////////////////////////////////////////////////////Problem 1\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\
+--1
+#Keywords.TSV Table: How did we create the table?
+#First we loaded the complete Keywords into the database Table “Keywords”. Which we created with the CREATE TABLE sql command. Afterwards we loaded all the words in using the tab as the delimiter between the different columns.
+#COPY Keywords FROM 'C:\Users\Public\Articles\Keywords.tsv' DELIMITER E'\t'
+#For the Revision Table the ID value is unique for each entry so we chose it as the primary key for this table. 
+#We realized that ID and Term aren’t unique. When querying with the SQL command ORDER BY Term we saw that special characters occurred multiple times for “Term”  and the index was also repeated. 
+#We added a foreign key id that references revision since all the keywords belong to an article in the revision table. The Option ON Update Cascade and On Delete Cascade was used since if we remove/update a tuple from Revision it would result in an error.
+#As a result, for a primary key of the Table Keyword we took a combination of ID and Term.
+
+
+CREATE TABLE Revision(
+ID INT  NOT NULL,
+TERM varchar(255),
+PRIMARY KEY (ID)
+);
+
+CREATE TABLE Keywords(
+ID INT NOT NULL,
+TERM varchar(20),  -- varchar of 20 since no words is bigger than 20 as a result varchar(255) would be to much
+SCORE real,
+PRIMARY KEY (ID,TERM),
+FOREIGN KEY (ID) REFERENCES Revision(id) ON UPDATE CASCADE ON DELETE CASCADE
+);
+
+--2.
+#We renamed both files as followed Wikipedia-EN-20120601_KEYWORDS.TSV to Keywords.TSV and
+#Wikipedia-EN-20120601_REVISION_URIS.TSV to Revision.TSV
+#The location of both Files were chosen in Public(Windows) and Shared(MacOs) to prevent failure on access rights in pgAdmin. 
+
+
+#////////////////////////////////////////////////////////////Windows\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\
+COPY Revision FROM 'C:\Users\Public\Articles\Revision.tsv' DELIMITER E'\t'
+COPY Keywords FROM 'C:\Users\Public\Articles\Keywords.tsv' DELIMITER E'\t'
+
+
+#////////////////////////////////////////////////////////////MacOs\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\
+COPY Keywords FROM '/Users/Shared/Keywords.tsv' DELIMITER E'\t';
+#(2min30)
+COPY Revision FROM '/Users/Shared/Revision.tsv' DELIMITER E'\t';
+#(15sec)
+
+
+--3.
+#Runtime with constraints:
+#Keywords 2min 30 sec
+#Revision 42 msec
+#Runtime without  constraints:
+#Keywords 9 secs 680 msec
+#Revision 37 msec
+#Since the primary key for Keywords combines 2 values the bulk loading of the TSV file takes much longer than bulk loading it without constraints, on top of that the foreign key constraint needs to verify that a valid entry is present in the referenced table which has significant impact. When we look at the Revision runtime we can see that the constraints had a minor impact on the runtime because the primary key is only composed of a single value.
+
+--4.
+#For running efficient queries the query itself should be efficient also. This means: For example we want to search for articles contain the keyword rock but not the keywords paper, scissor, game and the sum of the score of the keyword rock.
+
+#Query Test 1:
+SELECT Revision.Term, SUM(Keywords.score) FROM (
+SELECT Revision.Term FROM Revision INNER JOIN Keywords ON Revision.id = Keywords.id WHERE Keywords.Term='rock'
+EXCEPT(
+SELECT Revision.Term FROM Revision INNER JOIN Keywords ON Revision.id = Keywords.id WHERE Keywords.Term='paper' 
+UNION
+SELECT Revision.Term FROM Revision INNER JOIN Keywords ON Revision.id = Keywords.id WHERE Keywords.Term='scissor'
+UNION
+SELECT Revision.Term FROM Revision INNER JOIN Keywords ON Revision.id = Keywords.id WHERE Keywords.Term='game')) AS d
+INNER JOIN revision ON d.term = Revision.term INNER JOIN Keywords ON revision.id = keywords.id WHERE Keywords.Term='paper'
+OR Keywords.Term='rock' OR Keywords.Term='scissor' OR Keywords.Term='game' GROUP BY Revision.Term GROUP BY Revision.Term  
+ORDER BY SUM(keywords.score) DESC;
+
+
+#Query Test 2:
+SELECT Revision.Term, SUM(Keywords.score) FROM (
+SELECT Revision.Term FROM Revision INNER JOIN Keywords ON Revision.id = Keywords.id WHERE Keywords.Term='rock'
+EXCEPT(
+SELECT Revision.Term FROM Revision INNER JOIN Keywords ON Revision.id = Keywords.id WHERE Keywords.Term='paper' 
+  OR Keywords.Term='scissor' OR Keywords.Term='fire'
+)) AS d
+INNER JOIN revision ON d.term = Revision.term INNER JOIN Keywords ON revision.id = keywords.id WHERE Keywords.Term='paper'
+OR Keywords.Term='rock' OR Keywords.Term='scissor' OR Keywords.Term='game' GROUP BY Revision.Term GROUP BY Revision.Term  ORDER BY SUM(keywords.score) DESC;
+
+#As a result Query Test 1 and 2 return exactly the same values but query Test 2 needs 3 times as much time as the query test 1.  This is because of such an indexing. Primary Keys are by default indexed in SQL but foreign Keys aren’t directly indexed by SQL. As a result we should index our foreign Keys inside the Table revision to increase the performance  of such queries. It's recommended that every unique value shall also be indexed or have at least constraint to keep it unique  By keeping the values unique would result in a boost performance for joins and search queries.
+#As a conclusion we should definitely index the foreign key of the Keywords Table and For Grouping, Aggregation (SUM AVG) the score of the table Keywords should be Indexed. This has the result that we should use indexing on columns which we use/query through the most
+
+CREATE INDEX idx_FK_Keywords
+ON Keywords (ID);
+
+#But in case we wanted to do a lot of updates on a Table indexing would not be a good choice since if we update a lot the index needs also to be updated and would harm the performance.

@@ -1,0 +1,10 @@
+COPY TIME:
+
+Tables with key exectuion time:
+uris:  90 msec
+keywords: 2 min 32 secs
+
+Tables without key exectuion time:
+uris_wk: 70 ms
+keywords_wk 622 msec
+

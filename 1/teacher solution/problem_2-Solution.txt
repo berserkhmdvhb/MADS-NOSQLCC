@@ -1,0 +1,100 @@
+#////////////////////////////////////////////////////////////////////Problem 2\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\
+
+
+--1
+#INTERSECT: Only the articles present in all the 4 different queries will be selected, which means that the articles will have all of the keywords.
+
+
+SELECT Revision.Term FROM Revision INNER JOIN Keywords ON Revision.id = Keywords.id WHERE Keywords.Term='rock' 
+INTERSECT
+SELECT Revision.Term FROM Revision INNER JOIN Keywords ON Revision.id = Keywords.id WHERE Keywords.Term='paper'
+INTERSECT
+SELECT Revision.Term FROM Revision INNER JOIN Keywords ON Revision.id = Keywords.id WHERE Keywords.Term='scissor'
+INTERSECT
+SELECT Revision.Term FROM Revision INNER JOIN Keywords ON Revision.id = Keywords.id WHERE Keywords.Term='game'
+#(Can  be omitted)
+ORDER BY Term
+;
+
+
+
+--2
+#UNION: Every Term of the 4 queries will be selected which means that every article that has at least one of the keywords will be selected.
+
+
+SELECT Revision.Term FROM Revision INNER JOIN Keywords ON Revision.id = Keywords.id WHERE Keywords.Term='rock' 
+UNION
+SELECT Revision.Term FROM Revision INNER JOIN Keywords ON Revision.id = Keywords.id WHERE Keywords.Term='paper'
+UNION
+SELECT Revision.Term FROM Revision INNER JOIN Keywords ON Revision.id = Keywords.id WHERE Keywords.Term='scissor'
+UNION
+SELECT Revision.Term FROM Revision INNER JOIN Keywords ON Revision.id = Keywords.id WHERE Keywords.Term='game'
+#(Can  be omitted)
+ORDER BY Term
+;
+
+
+--3
+#EXCEPT: Every term that is present in the except will be removed from the selected terms, which means that only the articles with the keyword rock will be selected.
+
+
+SELECT Revision.Term FROM Revision INNER JOIN Keywords ON Revision.id = Keywords.id WHERE Keywords.Term='rock'
+EXCEPT
+(SELECT Revision.Term FROM Revision INNER JOIN Keywords ON Revision.id = Keywords.id WHERE Keywords.Term='paper' 
+UNION
+SELECT Revision.Term FROM Revision INNER JOIN Keywords ON Revision.id = Keywords.id WHERE Keywords.Term='scissor'
+UNION
+SELECT Revision.Term FROM Revision INNER JOIN Keywords ON Revision.id = Keywords.id WHERE Keywords.Term='game')
+;
+
+
+
+
+--4
+#We use the solution of --1 and join it with revision and keywords table to obtain the score of the individual keywords which we then sum up.
+
+
+SELECT Revision.Term, sum(score) FROM  (
+SELECT Revision.Term FROM Revision INNER JOIN Keywords ON Revision.id = Keywords.id WHERE Keywords.Term='rock' 
+INTERSECT
+SELECT Revision.Term FROM Revision INNER JOIN Keywords ON Revision.id = Keywords.id WHERE Keywords.Term='paper'
+INTERSECT
+SELECT Revision.Term FROM Revision INNER JOIN Keywords ON Revision.id = Keywords.id WHERE Keywords.Term='scissor'
+INTERSECT
+SELECT Revision.Term FROM Revision INNER JOIN Keywords ON Revision.id = Keywords.id WHERE Keywords.Term='game') AS d
+INNER JOIN revision ON d.term = Revision.term INNER JOIN Keywords ON revision.id = keywords.id WHERE Keywords.Term='game'
+OR Keywords.Term='rock' OR Keywords.Term='paper' OR Keywords.Term='scissor'
+GROUP BY Revision.Term ORDER BY SUM(score) DESC
+;
+        
+
+
+--5
+SELECT Revision.Term, SUM(Keywords.score) FROM (
+SELECT Revision.Term FROM Revision INNER JOIN Keywords ON Revision.id = Keywords.id WHERE Keywords.Term='rock' 
+UNION
+SELECT Revision.Term FROM Revision INNER JOIN Keywords ON Revision.id = Keywords.id WHERE Keywords.Term='paper'
+UNION
+SELECT Revision.Term FROM Revision INNER JOIN Keywords ON Revision.id = Keywords.id WHERE Keywords.Term='scissor'
+UNION
+SELECT Revision.Term FROM Revision INNER JOIN Keywords ON Revision.id = Keywords.id WHERE Keywords.Term='game') AS d
+INNER JOIN revision ON d.term = Revision.term INNER JOIN Keywords ON revision.id = keywords.id WHERE Keywords.Term='game'
+OR Keywords.Term='rock' OR Keywords.Term='paper' OR Keywords.Term='scissor' GROUP BY Revision.Term  
+ORDER BY SUM(score) DESC
+;
+
+
+
+--6
+SELECT Revision.Term, SUM(Keywords.score) FROM (
+SELECT Revision.Term FROM Revision INNER JOIN Keywords ON Revision.id = Keywords.id WHERE Keywords.Term='rock'
+EXCEPT(
+SELECT Revision.Term FROM Revision INNER JOIN Keywords ON Revision.id = Keywords.id WHERE Keywords.Term='paper' 
+UNION
+SELECT Revision.Term FROM Revision INNER JOIN Keywords ON Revision.id = Keywords.id WHERE Keywords.Term='scissor'
+UNION
+SELECT Revision.Term FROM Revision INNER JOIN Keywords ON Revision.id = Keywords.id WHERE Keywords.Term='game')) AS d
+INNER JOIN revision ON d.term = Revision.term INNER JOIN Keywords ON revision.id = keywords.id WHERE Keywords.Term='game'
+OR Keywords.Term='rock' OR Keywords.Term='paper' OR Keywords.Term='scissor' GROUP BY Revision.Term  
+ORDER BY SUM(keywords.score) DESC
+;
