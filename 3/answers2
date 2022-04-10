@@ -1,0 +1,176 @@
+PIG
+
+Q1
+yago = LOAD '/home/hamed/Documents/nosql/yago2.tsv' as (id:int, subject:chararray, predicate:chararray, object:chararray); 
+y_g = GROUP yago BY predicate; 
+y_gc = FOREACH y_g GENERATE group as groups, COUNT(yago) as count;
+y_gco = ORDER y_gc BY count DESC;
+y_gcol = LIMIT y_gco 3;
+
+
+Q2
+
+#1st Table (livesIn)
+yago = LOAD '/home/hamed/Documents/nosql/yago2.tsv' AS (chararray:int, subject:chararray, predicate:chararray, object:chararray); 
+yf = FILTER yago BY LOWER(predicate) MATCHES '<livesin>';
+yfg = GROUP yf BY subject;
+yfgc = FOREACH yfg GENERATE group AS subject, COUNT(yf.subject) as count;
+SPLIT yfgc INTO temp IF count > 1, shit IF count <= 1;
+
+
+#2nd table (hasGivenName)
+temp2 = FILTER yago BY LOWER(predicate) MATCHES '<hasgivenname>';
+testing = JOIN temp BY subject, temp2 BY subject;
+disc = DISTINCT testing;
+discoutput = FOREACH disc GENERATE $5;
+
+
+
+
+
+----
+
+
+HIVE
+
+Q1
+SELECT predicate, COUNT(*) FROM mu GROUP BY predicate ORDER BY COUNT(*) DESC LIMIT 3;
+
+
+Q2
+
+CREATE TABLE mu (id STRING, subject STRING, predicate STRING, object STRING) ROW FORMAT DELIMITED FIELDS TERMINATED BY '\t' STORED AS TEXTFILE LOCATION '/home/hamed/Documents/hive/tables';
+
+LOAD DATA LOCAL INPATH '/home/hamed/Documents/nosql/yago2.tsv' INTO TABLE mu;
+
+
+SELECT subject,count(predicate) FROM mu WHERE UPPER(TRIM(predicate)) == '<LIVESIN>' GROUP BY subject HAVING count(predicate) > 1;
+
+CREATE VIEW temp AS SELECT subject, count(predicate) FROM mu WHERE UPPER(TRIM(predicate)) == '<LIVESIN>' GROUP BY subject HAVING count(predicate) > 1;
+
+CREATE VIEW temp2 AS SELECT subject, count(predicate) FROM mu WHERE UPPER(TRIM(predicate)) == '<HASGIVENNAME>' GROUP BY subject;
+
+SELECT temp.*,temp2.* FROM temp JOIN temp2 ON temp.subject = temp2.subject;
+
+
+
+
+------
+
+MONGODB
+
+ 
+Q1 
+ 
+db.yago.aggregate([{$match: {predicate: {$in: ["<livesIn>","<hasGivenName>"]}}}, {$out: "tbj"}])
+
+
+db.tbj.aggregate([
+ {
+   $lookup:
+     {
+       from: "tbj",
+       let: { subject1: "$subject", object1: "$object", predicate1: "$predicate" },
+       pipeline: [ 
+		{ $match: { $expr: {$eq:["$subject", "$subject1"]} } },
+		{ $project: {"subject":false,"object1":false,"object":false, "predicate":false, "predicate1":false}}
+	],
+       as: "join_results"
+     }
+ },
+{$out: "joint"}
+]).pretty()
+
+db.joint.find( {subject:"<Amit_Sheth>" })
+
+Q2
+
+
+db.yago.aggregate([{$match: {predicate: "<isCitizenOf>"}}, {$group: {_id: "$subject", counts: {$sum : 1 }}}, {$out: "temp0"}] , {"allowDiskUse": true})
+
+
+
+
+db.temp0.aggregate([{ $match: { counts: { $gt: 2 } } },  {$out: "temp"}] , {"allowDiskUse": true})
+
+db.yago.aggregate([{$match: {predicate: "<hasFamilyName>"}}, {$group: {_id: "$subject", counts: {$sum : 1 }}}, {$out: "temp2"}] , {"allowDiskUse": true})
+
+
+
+
+
+#lookup 1st attempt
+
+db.temp.aggregate([
+ {
+   $lookup:
+     {
+       from: "temp2",
+       let: { subject1: "$subject", object1: "$object", predicate1: "$predicate" },
+       pipeline: [ 
+		{ $match: { $expr: {$eq:["$subject", "$$subject1"]} } },
+		{ $project: {"predicate":false,"predicate1":false}}
+	],
+       as: "join_results"
+     }
+ },
+{$out: "joint"}
+])
+
+
+
+
+
+#lookup 2nd attempt
+
+
+db.temp.aggregate([
+{
+   $lookup:
+     {
+       from: "temp2",
+       localField: "subject",
+       foreignField: "subject",
+       as: "justout"
+     }
+},
+{$out: "jointf"}
+], {"allowDiskUse": true}).pretty()
+
+
+#lookup 3rd attempt
+db.temp.aggregate([
+{
+$graphLookup : {
+from:"temp2",
+startWith:"$subject",
+connectToField:"_id",
+connectFromField:"subject",
+as:"find",
+maxDepth:0,
+}}
+,
+{$out: "jointf"}
+], {"allowDiskUse": true}).pretty()
+
+
+#lookup 4th attempt
+
+
+
+
+db.temp.aggregate([
+ {
+   $lookup:
+     {
+       from: "temp2",
+       pipeline: [ 
+		{ $match: { $expr: {$eq:["$db.temp.subject", "$db.temp2.subject"]} } }
+	],
+       as: "join_results"
+     }
+ },
+{$out: "joint2"}
+], {"allowDiskUse": true}).pretty()
+
+

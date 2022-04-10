@@ -1,0 +1,78 @@
+
+#Let the following be the content of the file: test.tsv
+
+1	a	p1	b
+2	b	p2	b1
+3	b	p3	b2
+4	c	p4	d
+
+#Bulk-load test.tsv file into a collection named "test"
+#Perform a self-join operation (using $lookup) and two pipeline operations together as follows:
+
+db.test.aggregate([
+ {
+   $lookup:
+     {
+       from: "test",
+       let: { subject1: "$subject", predicate1: "$predicate" },
+       pipeline: [ 
+		{ $match: { $expr: {$eq:["$subject", "$$subject1"]} } },
+		{ $project: {subject:0,predicate:0,_id:0}}
+	],
+       as: "join_results"
+     }
+ }
+]).pretty()
+
+
+#Output:
+{
+	"_id" : ObjectId("5dd55e38cfdb7346363aefce"),
+	"id" : 3,
+	"subject" : "b",
+	"predicate" : "p3",
+	"object" : "b2",
+	"join_results" : [
+		{
+			"id" : 3,
+			"object" : "b2"
+		},
+		{
+			"id" : 2,
+			"object" : "b1"
+		}
+	]
+}
+{
+	"_id" : ObjectId("5dd55e38cfdb7346363aefcf"),
+	"id" : 1,
+	"subject" : "a",
+	"predicate" : "p1",
+	"object" : "b",
+	"join_results" : [
+		{
+			"id" : 1,
+			"object" : "b"
+		}
+	]
+}
+{
+	"_id" : ObjectId("5dd55e38cfdb7346363aefd0"),
+	"id" : 2,
+	"subject" : "b",
+	"predicate" : "p2",
+	"object" : "b1",
+	"join_results" : [
+		{
+			"id" : 3,
+			"object" : "b2"
+		},
+		{
+			"id" : 2,
+			"object" : "b1"
+		}
+	]
+}
+
+Additional references:
+[1] https://docs.mongodb.com/manual/reference/operator/aggregation/lookup/index.html#lookup-multiple-joins
