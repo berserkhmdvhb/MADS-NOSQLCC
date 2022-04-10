@@ -1,0 +1,1 @@
+hadoop jar ~/Documents/BDS/eclipse/jar/nlpproject.jar PosTagCount ~/Documents/datasets/input/ ~/Documents/eclipse/newoutput2/
